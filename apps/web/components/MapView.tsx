@@ -76,7 +76,11 @@ interface Props {
 function wardNoOf(feature: Feature | undefined): number | null {
   const p = feature?.properties as Record<string, unknown> | undefined
   if (!p) return null
-  const raw = p.KGISWardNo ?? p.ward_no ?? p.WARD_NO
+  // GBA ward numbers restart in each corporation and cannot index
+  // datasets keyed to the former 243 BBMP wards. A future citable crosswalk
+  // may provide legacy_ward_no; until then these polygons stay honestly blank.
+  if (p.boundary_system === "gba-369-2025" && p.legacy_ward_no == null) return null
+  const raw = p.legacy_ward_no ?? p.KGISWardNo ?? p.ward_no ?? p.WARD_NO
   const n = parseInt(String(raw), 10)
   return Number.isFinite(n) ? n : null
 }
@@ -321,6 +325,12 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
       L.control.zoom({ position: "topright" }).addTo(map)
 
       L.tileLayer(BASE_TILE_URL, BASE_TILE_OPTIONS).addTo(map)
+      if (city.wardBoundarySource) {
+        const source = city.wardBoundarySource
+        map.attributionControl.addAttribution(
+          `<a href="${source.url}" target="_blank" rel="noopener noreferrer">${source.label}</a>`
+        )
+      }
 
       // Load ward GeoJSON overlay (per-city)
       fetch(city.geojsonUrl, { signal: controller.signal })
@@ -354,6 +364,9 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
             const p = feature.properties ?? {}
             const name = p.KGISWardName ?? p.ward_name ?? p.WARD_NAME ?? p.name ?? null
             if (!name) continue
+            const displayName = p.corporation && p.ward_no
+              ? `${name} · ${p.corporation} ${p.ward_no}`
+              : name
             // Calculate centroid from polygon coordinates
             const coords = feature.geometry?.coordinates
             if (!coords) continue
@@ -363,7 +376,10 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
             if (!ring || ring.length === 0) continue
             let sumLat = 0, sumLng = 0
             for (const [lng, lat] of ring) { sumLat += lat; sumLng += lng }
-            const centroid: [number, number] = [sumLat / ring.length, sumLng / ring.length]
+            const centroid: [number, number] = [
+              Number(p.center_lat) || sumLat / ring.length,
+              Number(p.center_lng) || sumLng / ring.length,
+            ]
 
             const label = L.marker(centroid, {
               icon: L.divIcon({
@@ -375,7 +391,7 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
                   pointer-events:none;
                   font-family:system-ui,sans-serif;
                   letter-spacing:0.02em;
-                ">${name.replace(/ Ward$/i, "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}</span>`,
+                ">${String(displayName).replace(/ Ward$/i, "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}</span>`,
                 className: "",
                 iconAnchor: [0, 0],
               }),
