@@ -19,6 +19,7 @@ import { pinLookup } from "@/lib/api"
 import { bengaluru, type CityConfig } from "@/lib/cities"
 import { BASE_TILE_OPTIONS, BASE_TILE_URL } from "@/lib/base-map"
 import { colorFor } from "@/lib/map-layers"
+import { currentWardMeta, featureContains, type CurrentWardMeta } from "@/lib/current-ward"
 
 /** Per-ward values + quantile breaks + ramp for choropleth painting */
 export interface ChoroplethData {
@@ -90,6 +91,7 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
   const mapRef = useRef<LeafletMap | null>(null)
   const geojsonRef = useRef<LeafletGeoJSON | null>(null)
   const choroplethRef = useRef<ChoroplethData | null>(choropleth)
+  const currentWardAtRef = useRef<(lat: number, lng: number) => CurrentWardMeta | null>(() => null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const reportLayerRef = useRef<any>(null)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -337,6 +339,11 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
         .then((r) => r.json())
         .then((data) => {
           if (!active) return
+          const wardFeatures = data.features as Feature[]
+          currentWardAtRef.current = (lat, lng) => {
+            const feature = wardFeatures.find(candidate => featureContains(candidate, lat, lng))
+            return feature ? currentWardMeta(feature) : null
+          }
           geojsonRef.current = L.geoJSON(data, {
             style: styleFeature,
             onEachFeature(feature, layer) {
@@ -457,6 +464,7 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
         onPinRef.current(null, lat, lng) // signal loading state
 
         const result = await pinLookup(lat, lng)
+        if (result?.found) Object.assign(result, currentWardAtRef.current(lat, lng) ?? {})
         onPinRef.current(result, lat, lng)
       })
     })
@@ -468,6 +476,7 @@ export default function MapView({ onPin, resizeKey = 0, panRef, reportRefresh = 
       mapRef.current = null
       geojsonRef.current = null
       labelLayerRef.current = null
+      currentWardAtRef.current = () => null
     }
   }, [city.center, city.geojsonUrl, city.zoom])
 

@@ -92,8 +92,14 @@ function OutOfBoundsCard({ onClose }: { onClose: () => void }) {
 interface WardOption {
   ward_no: number
   ward_name: string
+  ward_name_kn?: string
   corporation?: string
   corporation_id?: number
+  assembly_constituency?: string
+  assembly_no?: number
+  zone?: string
+  zone_name?: string
+  population?: number
   lat: number
   lng: number
 }
@@ -213,8 +219,14 @@ export default function HomePage({ host = "" }: { host?: string }) {
           opts.push({
             ward_no: no,
             ward_name: name.replace(/ Ward$/i, ""),
+            ward_name_kn: f.properties?.ward_name_kn,
             corporation: f.properties?.corporation,
             corporation_id: parseInt(f.properties?.corporation_id, 10) || undefined,
+            assembly_constituency: f.properties?.assembly_constituency,
+            assembly_no: Number(f.properties?.assembly_no) || undefined,
+            zone: f.properties?.zone,
+            zone_name: f.properties?.zone_name,
+            population: Number(f.properties?.population) || undefined,
             lat: Number(f.properties?.center_lat) || sLat / coords.length,
             lng: Number(f.properties?.center_lng) || sLng / coords.length,
           })
@@ -253,6 +265,20 @@ export default function HomePage({ host = "" }: { host?: string }) {
       setOutOfBounds(true)
       setPinLoading(false)
       return
+    }
+    if (ward.corporation) {
+      Object.assign(result, {
+        gba_ward_no: ward.ward_no,
+        gba_ward_name: ward.ward_name,
+        gba_ward_name_kn: ward.ward_name_kn ?? null,
+        gba_corporation: ward.corporation,
+        gba_corporation_id: ward.corporation_id ?? null,
+        gba_ac: ward.assembly_constituency ?? null,
+        gba_ac_no: ward.assembly_no ?? null,
+        gba_zone: ward.zone ?? null,
+        gba_zone_name: ward.zone_name ?? null,
+        gba_population: ward.population ?? null,
+      })
     }
     setPinResult(result)
     setPinLoading(false)
